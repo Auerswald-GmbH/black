@@ -36,7 +36,7 @@ else:
 from black.handle_ipynb_magics import jupyter_dependencies_are_installed
 from black.mode import TargetVersion
 from black.output import err
-from black.report import Report
+from black.report import ReportType
 
 if TYPE_CHECKING:
     import colorama  # noqa: F401
@@ -250,7 +250,7 @@ def get_gitignore(root: Path) -> PathSpec:
 def normalize_path_maybe_ignore(
     path: Path,
     root: Path,
-    report: Optional[Report] = None,
+    report: Optional[ReportType] = None,
 ) -> Optional[str]:
     """Normalize `path`. May return `None` if `path` was ignored.
 
@@ -277,7 +277,7 @@ def normalize_path_maybe_ignore(
 
 
 def path_is_ignored(
-    path: Path, gitignore_dict: Dict[Path, PathSpec], report: Report
+    path: Path, gitignore_dict: Dict[Path, PathSpec], report: ReportType
 ) -> bool:
     for gitignore_path, pattern in gitignore_dict.items():
         relative_path = normalize_path_maybe_ignore(path, gitignore_path, report)
@@ -304,7 +304,7 @@ def gen_python_files(
     exclude: Pattern[str],
     extend_exclude: Optional[Pattern[str]],
     force_exclude: Optional[Pattern[str]],
-    report: Report,
+    report: ReportType,
     gitignore_dict: Optional[Dict[Path, PathSpec]],
     *,
     verbose: bool,

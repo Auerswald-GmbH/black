@@ -81,6 +81,7 @@ from black.nodes import (
 from black.output import color_diff, diff, dump_to_file, err, ipynb_diff, out
 from black.parsing import InvalidInput  # noqa F401
 from black.parsing import lib2to3_parse, parse_ast, stringify_ast
+from black.report import JunitReport, Report, ReportType, Changed, NothingChanged
 from black.report import Changed, NothingChanged, Report
 from black.trans import iter_fexpr_spans
 from blib2to3.pgen2 import token
@@ -439,6 +440,14 @@ def validate_regex(
     callback=read_pyproject_toml,
     help="Read configuration from FILE path.",
 )
+@click.option(
+    "--junitxml",
+    type=click.File(mode="w"),
+    help=(
+        "Option is needed for --report-type junit it tells where to store the XML"
+        " Output.\nIf directory is not present it will be created"
+    ),
+)
 @click.pass_context
 def main(  # noqa: C901
     ctx: click.Context,
@@ -468,7 +477,9 @@ def main(  # noqa: C901
     workers: Optional[int],
     src: Tuple[str, ...],
     config: Optional[str],
+    junitxml: click.utils.LazyFile,
 ) -> None:
+    report: ReportType
     """The uncompromising code formatter."""
     ctx.ensure_object(dict)
 
@@ -553,7 +564,18 @@ def main(  # noqa: C901
         # You can still pass -v to get verbose output.
         quiet = True
 
-    report = Report(check=check, diff=diff, quiet=quiet, verbose=verbose)
+    if junitxml:
+        junitxml_path = Path(junitxml.name).parent
+        if not junitxml_path.exists():
+            junitxml_path.mkdir(exist_ok=True)
+            err(
+                f"{error_msg} Could not create path for"
+                f" JunitXML Report: {junitxml_path}"
+            )
+            ctx.exit()
+        report = JunitReport(check=check, diff=diff, quiet=quiet, verbose=verbose)
+    else:
+        report = Report(check=check, diff=diff, quiet=quiet, verbose=verbose)
 
     if code is not None:
         reformat_code(
@@ -609,7 +631,11 @@ def main(  # noqa: C901
             out()
         out(error_msg if report.return_code else "All done! ✨ 🍰 ✨")
         if code is None:
-            click.echo(str(report), err=True)
+            if isinstance(report, JunitReport):
+                junitxml.write(str(report))  # type: ignore
+                click.echo(str(report.summary()), err=True)
+            else:
+                click.echo(str(report), err=True)
     ctx.exit(report.return_code)
 
 
@@ -623,7 +649,7 @@ def get_sources(
     exclude: Optional[Pattern[str]],
     extend_exclude: Optional[Pattern[str]],
     force_exclude: Optional[Pattern[str]],
-    report: "Report",
+    report: ReportType,
     stdin_filename: Optional[str],
 ) -> Set[Path]:
     """Compute the set of files to be formatted."""
@@ -720,7 +746,7 @@ def path_empty(
 
 
 def reformat_code(
-    content: str, fast: bool, write_back: WriteBack, mode: Mode, report: Report
+    content: str, fast: bool, write_back: WriteBack, mode: Mode, report: ReportType
 ) -> None:
     """
     Reformat and print out `content` without spawning child processes.
